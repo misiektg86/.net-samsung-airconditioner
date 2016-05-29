@@ -14,25 +14,27 @@ namespace SamsungAirConditioner
             var ac = new AirConditioner(connectionFactory);
             Task.Factory.StartNew(async () =>
             {
-              
+
 
                 var token = new Token("8852e023-ddfd-4ae4-8f55-dccd0a358246"); //await TokenRequester.GetTokenAsync(connectionFactory);
 
                 Console.WriteLine(token.Id);
 
-           
+
 
                 await ac.Login(token);
 
                 Console.WriteLine($"Connected to AC with token {token.Id}");
 
+                await ac.RequestDeviceStatus();
+
+              //  await ac.SetFanSpeed(FanSpeed.Auto);
+
+                Console.WriteLine("Set fan speed - TURBO");
+
             });
 
-            while (true)
-            {
-                var val = Console.ReadLine();
-                Task.Factory.StartNew(async () => await ac.SetTemperature(int.Parse(val)));
-            }
+            Console.ReadLine();
         }
     }
 }

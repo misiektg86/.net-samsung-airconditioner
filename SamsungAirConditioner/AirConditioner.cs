@@ -1,25 +1,33 @@
 ﻿using System;
-using System.Diagnostics;
 using System.IO;
-using System.Net.Security;
-using System.Net.Sockets;
-using System.Security.Authentication;
-using System.Security.Cryptography.X509Certificates;
-using System.Text;
-using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace SamsungAirConditioner
 {
-    public class AirConditioner : IDisposable
+    public sealed class AirConditioner : IDisposable
     {
         private readonly IConnectionFactory _connectionFactory;
 
         private Stream _stream;
 
+        private readonly Thread _infoThread;
+
+        private readonly Random _random = new Random();
+
+        private const string Duid = "F8042E300BFE";
+
         public AirConditioner(IConnectionFactory connectionFactory)
         {
             _connectionFactory = connectionFactory;
+
+            _infoThread = new Thread(() =>
+           {
+               while (true)
+               {
+                   StreamUtils.ReadMessageAsync(_stream, i => i.Contains("?xml")).Wait();
+               }
+           });
         }
 
         public async Task Login(Token token)
@@ -32,28 +40,42 @@ namespace SamsungAirConditioner
 
             await StreamUtils.ReadMessageAsync(_stream, i => i.Contains("Response Type=\"AuthToken\" Status=\"Okay\""));
 
-            Task.Factory.StartNew(async () =>
-            {
-                while (true)
-                {
-                    await StreamUtils.ReadMessageAsync(_stream, i => i.Contains("?xml"));
-                }
-            });
+            _infoThread.Start();
         }
 
-        public async Task SetTemperature(int temp)
+        public async Task OnOff(PowerSwitch powerSwitch)
         {
-            if (temp < 16)
-            {
-                temp = 16;
-            }
+            await SendCommand(Commands.AC_FUN_POWER, powerSwitch.ToString());
+        }
 
-            if (temp > 30)
-            {
-                temp = 30;
-            }
+        public async Task SetTemperature(Temperature temp)
+        {
+            await SendCommand(Commands.AC_FUN_TEMPSET, ((int)temp).ToString());
+        }
 
-            await StreamUtils.SendMessageAsync(_stream, "<Request Type=\"DeviceControl\"><Control CommandID=\"cmd" + _random.Next() + "\" DUID=\"" + Duid + "\"><Attr ID=\"AC_FUN_TEMPSET\" Value=\"" + temp.ToString() + "\" /></Control></Request>\r\n");
+        public async Task SetFanSpeed(FanSpeed speed)
+        {
+            await SendCommand(Commands.AC_FUN_WINDLEVEL, speed.ToString());
+        }
+
+        public async Task SetOptions(Options options)
+        {
+            await SendCommand(Commands.AC_FUN_COMODE, options.ToString());
+        }
+
+        public async Task SetMode(Mode mode)
+        {
+            await SendCommand(Commands.AC_FUN_OPMODE, mode.ToString());
+        }
+
+        public async Task RequestDeviceStatus()
+        {
+            await StreamUtils.SendMessageAsync(_stream, "<Request Type=\"DeviceState\" DUID=\"" + Duid + "\"></Request>\r\n");
+        }
+
+        private async Task SendCommand(string command, string value)
+        {
+            await StreamUtils.SendMessageAsync(_stream, "<Request Type=\"DeviceControl\"><Control CommandID=\"cmd" + _random.Next() + "\" DUID=\"" + Duid + "\"><Attr ID=\"" + command + "\" Value=\"" + value + "\" /></Control></Request>\r\n");
         }
 
         public void Dispose()
@@ -61,8 +83,54 @@ namespace SamsungAirConditioner
             _stream.Dispose();
         }
 
-        private Random _random = new Random();
+        private static class Commands
+        {
+            internal const string AC_FUN_WINDLEVEL = "AC_FUN_WINDLEVEL";
 
-        private const string Duid = "F8042E300BFE";
+            internal const string AC_FUN_TEMPSET = "AC_FUN_TEMPSET";
+
+            internal const string AC_FUN_COMODE = "AC_FUN_COMODE";
+
+            internal const string AC_FUN_POWER = "AC_FUN_POWER";
+
+            internal const string AC_FUN_OPMODE = "AC_FUN_OPMODE";
+        }
+    }
+
+    public enum Mode
+    {
+        Auto,
+        Cool,
+        Dry,
+        Wind,
+        Heat
+    }
+
+    public enum PowerSwitch
+    {
+        On,
+        Off
+    }
+
+    public enum Options
+    {
+        Off,
+        Quiet,
+        Sleep,
+        Smart,
+        SoftCool,
+        TurboMode,
+        WindMode1,
+        WindMode2,
+        WindMode3
+    }
+
+    public enum FanSpeed
+    {
+        Auto,
+        Low,
+        Mid,
+        High,
+        Turbo
     }
 }

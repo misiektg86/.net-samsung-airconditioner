@@ -55,6 +55,7 @@
     </Compile>
     <Compile Include="SimpleConnectionFactory.cs" />
     <Compile Include="StreamUtils.cs" />
+    <Compile Include="Temperature.cs" />
     <Compile Include="Token.cs" />
     <Compile Include="TokenRequester.cs" />
   </ItemGroup>
